@@ -70,6 +70,5 @@ namespace integracaoopctcptests
 			Assert::AreEqual(gasInjectionPressureSP, messageHandler.getGasInjectionPressureSP());
 			Assert::AreEqual(vaccumChamberTemperatureSP, messageHandler.getVaccumChamberTemperatureSP());
 			Assert::AreEqual(vaccumChamberPressureSP, messageHandler.getVaccumChamberPressureSP());
-		}
 	};
 }
