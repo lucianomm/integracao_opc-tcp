@@ -32,26 +32,43 @@ Message structure should follow this schematic:
 #define MESSAGEHANDLING_H
 
 class MessageHandling {
-public:
-	struct Message
+	struct MessageDataStructure
 	{
 		int SequenceNumber;
 		int MessageCode;
+	};
+	struct ProcessDataMessage
+	{
 		double LadleTemperature;
 		double VaccumChamberTemperature;
 		double GasInjectionPressure;
-		double VaccumChamperPressure;
+		double VaccumChamberPressure;
 	};
-	int getSequenceNumber();
-	int getMessageCode();
-	double getLadleTemperature();
-	double getVaccumChamberTemperature();
-	double getGasInjectionPressure();
-	double getVaccumChamberPressure();
-	MessageHandling(std::string RawMessage);
+	struct SetPointsMessage
+	{
+		double GasInjectionPressureSP;
+		double VaccumChamberTemperatureSP;
+		int VaccumChamberPressureSP;
+	};
 private:
-	Message message;
-	Message ConvertMessage(std::string RawMessage);
+	ProcessDataMessage processDataMessage;
+	MessageDataStructure messageHeader;
+	SetPointsMessage setPointsMessage;
+	std::string rawMessage;
+	void ConvertMessageHeader();
+public:
+	int getSequenceNumber() { return messageHeader.SequenceNumber; }
+	int getMessageCode() { return messageHeader.MessageCode; }
+	double getLadleTemperature() { return processDataMessage.LadleTemperature; }
+	double getVaccumChamberTemperature() { return processDataMessage.VaccumChamberTemperature; }
+	double getGasInjectionPressure() { return processDataMessage.GasInjectionPressure; }
+	double getVaccumChamberPressure() { return processDataMessage.VaccumChamberPressure; }
+	double getGasInjectionPressureSP() { return setPointsMessage.GasInjectionPressureSP; }
+	double getVaccumChamberTemperatureSP() { return setPointsMessage.VaccumChamberTemperatureSP; }
+	int getVaccumChamberPressureSP() { return setPointsMessage.VaccumChamberPressureSP; }
+	MessageHandling(std::string RawMessage);
+	void ConvertProcessDataMessage();
+	void ConvertSetPointsMessage();
 };
 
 #endif

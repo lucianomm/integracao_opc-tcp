@@ -3,46 +3,44 @@
 #include <string>
 using namespace std;
 #pragma once
-MessageHandling::Message MessageHandling::ConvertMessage(string RawMessage) {
-		MessageHandling::Message convertedMessage;
-		string substring = RawMessage.substr(0, RawMessage.find('$'));
-		convertedMessage.SequenceNumber = stoi(substring);
-		RawMessage.erase(0, RawMessage.find('$')+1);
+void MessageHandling::ConvertMessageHeader() {
 
-		convertedMessage.MessageCode = stoi(RawMessage.substr(0, RawMessage.find('$')));
-		RawMessage.erase(0, RawMessage.find('$') + 1);
+	messageHeader.SequenceNumber = stoi(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
 
-		convertedMessage.LadleTemperature = stod(RawMessage.substr(0, RawMessage.find('$')));
-		RawMessage.erase(0, RawMessage.find('$') + 1);
+	messageHeader.MessageCode = stoi(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
 
-		convertedMessage.VaccumChamberTemperature = stod(RawMessage.substr(0, RawMessage.find('$')));
-		RawMessage.erase(0, RawMessage.find('$') + 1);
+	return;
+}
+void MessageHandling::ConvertSetPointsMessage() {
+	setPointsMessage.GasInjectionPressureSP = stod(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
 
-		convertedMessage.GasInjectionPressure = stod(RawMessage.substr(0, RawMessage.find('$')));
-		RawMessage.erase(0, RawMessage.find('$') + 1);
+	setPointsMessage.VaccumChamberTemperatureSP = stod(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
 
-		convertedMessage.VaccumChamperPressure = stod(RawMessage.substr(0, RawMessage.find('$')));
-		RawMessage.erase(0, RawMessage.find('$') + 1);
+	setPointsMessage.VaccumChamberPressureSP = stoi(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
 
-		return convertedMessage;
-	}
-int MessageHandling::getSequenceNumber() {
-	return message.SequenceNumber;
+	return;
 }
-int MessageHandling::getMessageCode() {
-	return message.MessageCode;
+void MessageHandling::ConvertProcessDataMessage() {
+
+	processDataMessage.LadleTemperature = stod(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
+
+	processDataMessage.VaccumChamberTemperature = stod(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
+
+	processDataMessage.GasInjectionPressure = stod(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
+
+	processDataMessage.VaccumChamberPressure = stod(rawMessage.substr(0, rawMessage.find('$')));
+	rawMessage.erase(0, rawMessage.find('$') + 1);
+
+	return;
 }
-double MessageHandling::getLadleTemperature() {
-	return message.LadleTemperature;
-}
-double MessageHandling::getVaccumChamberTemperature() {
-	return message.VaccumChamberTemperature;
-}
-double MessageHandling::getGasInjectionPressure() {
-	return message.GasInjectionPressure;
-}
-double MessageHandling::getVaccumChamberPressure() {
-	return message.VaccumChamperPressure;
-}
-MessageHandling::MessageHandling(string RawMessage) : message(ConvertMessage(RawMessage)) {
+MessageHandling::MessageHandling(string RawMessage) : rawMessage(RawMessage) {
+	ConvertMessageHeader();
 }
