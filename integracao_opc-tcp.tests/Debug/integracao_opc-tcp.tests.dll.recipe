@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\Users\lucia\Documents\UFMG\SDA\TP1\integracao_opc-tcp\Debug\integracao_opc-tcp.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lucia\Documents\UFMG\SDA\TP1\integracao_opc-tcp\Debug\integracao_opc-tcp.tests.dll</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>
