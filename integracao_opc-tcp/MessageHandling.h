@@ -32,6 +32,7 @@ Message structure should follow this schematic:
 #define MESSAGEHANDLING_H
 
 class MessageHandling {
+private:
 	struct MessageDataStructure
 	{
 		int SequenceNumber;
@@ -50,7 +51,6 @@ class MessageHandling {
 		double VaccumChamberTemperatureSP;
 		int VaccumChamberPressureSP;
 	};
-private:
 	bool isProcessDataMessage = false, isSetPointsMessage = false;
 	ProcessDataMessage processDataMessage;
 	MessageDataStructure messageHeader;
@@ -62,6 +62,8 @@ private:
 	std::string ACKMessageToString();
 	std::string MessageHeaderToString();
 	std::string RealToString(double real);
+	void ConvertProcessDataMessage();
+	void ConvertSetPointsMessage();
 public:
 	int getSequenceNumber() { return messageHeader.SequenceNumber; }
 	int getMessageCode() { return messageHeader.MessageCode; }
@@ -73,8 +75,6 @@ public:
 	double getVaccumChamberTemperatureSP() { return setPointsMessage.VaccumChamberTemperatureSP; }
 	int getVaccumChamberPressureSP() { return setPointsMessage.VaccumChamberPressureSP; }
 	MessageHandling(std::string RawMessage);
-	void ConvertProcessDataMessage();
-	void ConvertSetPointsMessage();
 	std::string toString();
 };
 
