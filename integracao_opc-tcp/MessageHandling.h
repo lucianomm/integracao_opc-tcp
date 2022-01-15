@@ -51,11 +51,17 @@ class MessageHandling {
 		int VaccumChamberPressureSP;
 	};
 private:
+	bool isProcessDataMessage = false, isSetPointsMessage = false;
 	ProcessDataMessage processDataMessage;
 	MessageDataStructure messageHeader;
 	SetPointsMessage setPointsMessage;
 	std::string rawMessage;
 	void ConvertMessageHeader();
+	std::string ProcessDataMessageToString();
+	std::string SetPointsMessagetoString();
+	std::string ACKMessageToString();
+	std::string MessageHeaderToString();
+	std::string RealToString(double real);
 public:
 	int getSequenceNumber() { return messageHeader.SequenceNumber; }
 	int getMessageCode() { return messageHeader.MessageCode; }
@@ -69,6 +75,7 @@ public:
 	MessageHandling(std::string RawMessage);
 	void ConvertProcessDataMessage();
 	void ConvertSetPointsMessage();
+	std::string toString();
 };
 
 #endif
