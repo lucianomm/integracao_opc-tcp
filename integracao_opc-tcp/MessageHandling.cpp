@@ -6,6 +6,8 @@ using namespace std;
 #pragma once
 #define SEQUENCE_FIELD_SIZE 6
 #define REAL_FIELD_SIZE 6
+#define PROCESS_DATA_MESSAGE_CODE 100
+#define SETPOINTS_MESSAGE_CODE 103
 void MessageHandling::ConvertMessageHeader() {
 
 	messageHeader.SequenceNumber = stoi(rawMessage.substr(0, rawMessage.find('$')));
@@ -17,7 +19,6 @@ void MessageHandling::ConvertMessageHeader() {
 	return;
 }
 void MessageHandling::ConvertSetPointsMessage() {
-	isSetPointsMessage = true;
 	setPointsMessage.GasInjectionPressureSP = stod(rawMessage.substr(0, rawMessage.find('$')));
 	rawMessage.erase(0, rawMessage.find('$') + 1);
 
@@ -30,7 +31,6 @@ void MessageHandling::ConvertSetPointsMessage() {
 	return;
 }
 void MessageHandling::ConvertProcessDataMessage() {
-	isProcessDataMessage = true;
 	processDataMessage.LadleTemperature = stod(rawMessage.substr(0, rawMessage.find('$')));
 	rawMessage.erase(0, rawMessage.find('$') + 1);
 
@@ -47,6 +47,15 @@ void MessageHandling::ConvertProcessDataMessage() {
 }
 MessageHandling::MessageHandling(string RawMessage) : rawMessage(RawMessage) {
 	ConvertMessageHeader();
+	if (messageHeader.MessageCode == PROCESS_DATA_MESSAGE_CODE) {
+		isProcessDataMessage = true;
+		ConvertProcessDataMessage();
+	}
+	else if(messageHeader.MessageCode == SETPOINTS_MESSAGE_CODE)
+	{
+		isSetPointsMessage = true;
+		ConvertSetPointsMessage();
+	}
 }
 
 string MessageHandling::MessageHeaderToString() {

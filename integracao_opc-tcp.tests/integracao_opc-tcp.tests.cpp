@@ -32,7 +32,7 @@ namespace integracaoopctcptests
 			double vaccumChamberTemperature = 1480.0;
 			double gasInjectionPressure = 0002.0;
 			double vaccumChamberPressure = 0010.0;
-			string message = 
+			string processDataMessageExample = 
 				to_string(sequenceNumber) + '$' + 
 				to_string(messageCode) + '$' +
 				to_string(ladleTemperature) + '$' +
@@ -40,8 +40,7 @@ namespace integracaoopctcptests
 				to_string(gasInjectionPressure) + '$' +
 				to_string(vaccumChamberPressure);
 
-			MessageHandling messageHandler(message);
-			messageHandler.ConvertProcessDataMessage();
+			MessageHandling messageHandler(processDataMessageExample);
 			Assert::AreEqual(sequenceNumber, messageHandler.getSequenceNumber());
 			Assert::AreEqual(messageCode, messageHandler.getMessageCode());
 			Assert::AreEqual(ladleTemperature, messageHandler.getLadleTemperature());
@@ -56,15 +55,14 @@ namespace integracaoopctcptests
 			double gasInjectionPressureSP = 0010.0;
 			double vaccumChamberTemperatureSP = 1450.0;
 			int vaccumChamberPressureSP = 0002;
-			string message =
+			string setpointsMessageExample =
 				to_string(sequenceNumber) + '$' +
 				to_string(messageCode) + '$' +
 				to_string(gasInjectionPressureSP) + '$' + 
 				to_string(vaccumChamberTemperatureSP) + '$' + 
 				to_string(vaccumChamberPressureSP);
 
-			MessageHandling messageHandler(message);
-			messageHandler.ConvertSetPointsMessage();
+			MessageHandling messageHandler(setpointsMessageExample);
 			Assert::AreEqual(sequenceNumber, messageHandler.getSequenceNumber());
 			Assert::AreEqual(messageCode, messageHandler.getMessageCode());
 			Assert::AreEqual(gasInjectionPressureSP, messageHandler.getGasInjectionPressureSP());

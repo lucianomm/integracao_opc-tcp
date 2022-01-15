@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <string>
 #include "MessageHandling.h"
-#include "integracao_opc-tcp.h"
 
 using namespace std;
 
@@ -126,7 +125,6 @@ int main(int argc, char** argv)
     int         port, status;
     string processDataExampleMessage = "000001$100$1435.0$1480.0$0002.0$0010.0";
     MessageHandling processDataExample(processDataExampleMessage);
-    processDataExample.ConvertProcessDataMessage();
 
     ipaddr = argv[1];
     port = atoi(argv[2]);
