@@ -33,19 +33,50 @@
 #include "opcerror.h"
 #include "SimpleOPCClient_v3.h"
 #include "SOCAdviseSink.h"
+#include "SOCDataCallback.h"                                                                                                                                                                                                                                                                                                                                                                                                                                                      e "SOCWrapperFunctions.h"
+#include <winsock2.h>
+#include <stdio.h>
+#include <string>
+
+#include <windows.h>
+#include <string.h>
+#include <stdlib.h>
+#include <conio.h>		
+#include <ws2tcpip.h>
+#include <math.h>                                               
+#include <mutex>
+
+#include "opcda.h"
+#include "opcerror.h"
+#include "SimpleOPCClient_v3.h"
 #include "SOCDataCallback.h"
 #include "SOCWrapperFunctions.h"
 
+/* ======================================================= */
+/* NAMESPACE AREA */
+
 using namespace std;
 
-#define OPC_SERVER_NAME		L"Matrikon.OPC.Simulation.1"
-#define	VT					VT_R4
+/* ======================================================= */
+/* DEFINE AREA */
 
-#define TAM_MSG_DADOS		38
-#define TAM_MSG_CONFIRMACAO 10
-#define TAM_MSG_SOLICITACAO 10
-#define TAM_MSG_SETPOINT	29
-#define TAM_MSG_ACK			10
+#define OPC_SERVER_NAME			L"Matrikon.OPC.Simulation.1"
+#define	VT						VT_R4
+
+#define TAM_MSG_DADOS			38
+#define TAM_MSG_CONFIRMACAO		10
+#define TAM_MSG_SOLICITACAO		10
+#define TAM_MSG_SETPOINT		29
+#define TAM_MSG_ACK				10
+
+#define ESC						0x1B
+
+#define WHITE   FOREGROUND_RED   | FOREGROUND_GREEN      | FOREGROUND_BLUE  | FOREGROUND_INTENSITY
+#define HLGREEN FOREGROUND_GREEN | FOREGROUND_INTENSITY
+#define HLRED   FOREGROUND_RED   | FOREGROUND_INTENSITY
+#define HLBLUE  FOREGROUND_BLUE  | FOREGROUND_INTENSITY
+#define YELLOW  FOREGROUND_RED   | FOREGROUND_GREEN
+#define CYAN    FOREGROUND_BLUE  | FOREGROUND_GREEN      | FOREGROUND_INTENSITY
 
 //#define REMOTE_SERVER_NAME L"your_path"
 
@@ -55,6 +86,8 @@ using namespace std;
 // them. The one below refers to the OPC DA 1.0 IDataObject interface.
 UINT OPC_DATA_TIME = RegisterClipboardFormat (_T("OPCSTMFORMATDATATIME"));
 
+/* ======================================================= */
+/* GLOBAL VARIABLE */
 wchar_t ITEM_ID_TEMP_PANELA[] = L"Random.Real4"; // Temperatura na panela de aco (K)
 wchar_t ITEM_ID_TEMP_CAMARA[] = L"Saw-toothed Waves.Real4"; // Temperatura na camara a vacuo (K)
 wchar_t ITEM_ID_PRES_ARGONIO[] = L"Triangle Waves.Real4"; // Pressao de injecao de gas argonio (mmHg)
@@ -91,7 +124,7 @@ HANDLE hEvent;
 
 //////////////////////////////////////////////////////////////////////
 // Read the value of an item on an OPC server. 
-//
+
 void main(void)
 {	
 	SetConsoleTitle("ACIARIA");

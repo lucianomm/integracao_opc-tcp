@@ -28,9 +28,21 @@
 IOPCServer *InstantiateServer(wchar_t ServerName[]);
 void AddTheGroup(IOPCServer* pIOPCServer, IOPCItemMgt* &pIOPCItemMgt, 
 				 OPCHANDLE& hServerGroup);
-void AddTheItem(IOPCItemMgt* pIOPCItemMgt, OPCHANDLE& hServerItem);
-void ReadItem(IUnknown* pGroupIUnknown, OPCHANDLE hServerItem, VARIANT& varValue);
-void RemoveItem(IOPCItemMgt* pIOPCItemMgt, OPCHANDLE hServerItem);
+void AddTheItem(IOPCItemMgt* pIOPCItemMgt,	OPCHANDLE& hServer_ITEM_ID_TEMP_PANELA,
+											OPCHANDLE& hServer_ITEM_ID_TEMP_CAMARA,
+											OPCHANDLE& hServer_ITEM_ID_PRES_ARGONIO,
+											OPCHANDLE& hServer_ITEM_ID_PRES_CAMARA,
+											OPCHANDLE& hITEM_ID_SP_PRES_ARGONIO,
+											OPCHANDLE& hITEM_ID_SP_TEMP_CAMARA,
+											OPCHANDLE& hITEM_ID_SP_PRES_CAMARA);
+void WriteItem(IUnknown* pGroupIUnknown,	OPCHANDLE hServerItem, VARIANT& varValue);
+void RemoveItem(IOPCItemMgt* pIOPCItemMgt,	OPCHANDLE hServer_ITEM_ID_TEMP_PANELA,
+											OPCHANDLE hServer_ITEM_ID_TEMP_CAMARA,
+											OPCHANDLE hServer_ITEM_ID_PRES_ARGONIO,
+											OPCHANDLE hServer_ITEM_ID_PRES_CAMARA,
+											OPCHANDLE hITEM_ID_SP_PRES_ARGONIO,
+											OPCHANDLE hITEM_ID_SP_TEMP_CAMARA,
+											OPCHANDLE hITEM_ID_SP_PRES_CAMARA);
 void RemoveGroup(IOPCServer* pIOPCServer, OPCHANDLE hServerGroup);
 
 #endif // SIMPLE_OPC_CLIENT_H not defined
