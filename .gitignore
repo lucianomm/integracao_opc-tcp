@@ -43,3 +43,14 @@
 *.db-wal
 *.db
 *.ipch
+*.tlog
+*.log
+*.ilk
+*.enc
+*.txt
+*.idb
+*.pdb
+*.db
+*.ilk
+*.log
+*.exp
