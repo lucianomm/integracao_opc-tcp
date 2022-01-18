@@ -75,6 +75,11 @@ public:
 	double getVaccumChamberTemperatureSP() { return setPointsMessage.VaccumChamberTemperatureSP; }
 	int getVaccumChamberPressureSP() { return setPointsMessage.VaccumChamberPressureSP; }
 	MessageHandling(std::string RawMessage);
+	MessageHandling(int sequenceNumber, int messageCode, double ladleTemperature,
+		double vaccumChamberTemperature, double gasInjectionPressure, double vaccumChamberPressure);
+	void UpdateMessageFromString(std::string RawMessage);
+	void UpdateProcessData(int sequenceNumber, int messageCode, double ladleTemperature,
+		double vaccumChamberTemperature, double gasInjectionPressure, double vaccumChamberPressure);
 	std::string toString();
 };
 
