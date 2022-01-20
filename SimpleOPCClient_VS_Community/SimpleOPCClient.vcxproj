@@ -64,6 +64,7 @@
       <SubSystem>Console</SubSystem>
       <TargetMachine>MachineX86</TargetMachine>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>kernel32.lib;Ws2_32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -87,6 +88,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="MessageHandling.cpp" />
     <ClCompile Include="opcda_i.c" />
     <ClCompile Include="SimpleOPCClient_v3.cpp" />
     <ClCompile Include="SOCAdviseSink.cpp" />
@@ -94,6 +96,7 @@
     <ClCompile Include="SOCWrapperlFunctions.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="MessageHandling.h" />
     <ClInclude Include="opcda.h" />
     <ClInclude Include="opcerror.h" />
     <ClInclude Include="SimpleOPCClient_v3.h" />

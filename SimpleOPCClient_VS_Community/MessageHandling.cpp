@@ -45,6 +45,8 @@ void MessageHandling::ConvertProcessDataMessage() {
 
 	return;
 }
+
+//Constructor for Raw message string
 MessageHandling::MessageHandling(string RawMessage) : rawMessage(RawMessage) {
 	ConvertMessageHeader();
 	if (messageHeader.MessageCode == PROCESS_DATA_MESSAGE_CODE) {
@@ -56,6 +58,36 @@ MessageHandling::MessageHandling(string RawMessage) : rawMessage(RawMessage) {
 		isSetPointsMessage = true;
 		ConvertSetPointsMessage();
 	}
+}
+
+void MessageHandling::UpdateMessageFromString(string RawMessage){
+	rawMessage = RawMessage;
+	ConvertMessageHeader();
+	if (messageHeader.MessageCode == PROCESS_DATA_MESSAGE_CODE) {
+		isProcessDataMessage = true;
+		ConvertProcessDataMessage();
+	}
+	else if (messageHeader.MessageCode == SETPOINTS_MESSAGE_CODE)
+	{
+		isSetPointsMessage = true;
+		ConvertSetPointsMessage();
+	}
+}
+
+void MessageHandling::UpdateProcessData(int sequenceNumber, int messageCode, double ladleTemperature,
+	double vaccumChamberTemperature, double gasInjectionPressure, double vaccumChamberPressure) 
+{
+	messageHeader.SequenceNumber = sequenceNumber;
+
+	messageHeader.MessageCode = messageCode;
+
+	processDataMessage.LadleTemperature = ladleTemperature;
+
+	processDataMessage.VaccumChamberTemperature = vaccumChamberTemperature;
+
+	processDataMessage.GasInjectionPressure = gasInjectionPressure;
+
+	processDataMessage.VaccumChamberPressure = vaccumChamberPressure;
 }
 
 string MessageHandling::MessageHeaderToString() {

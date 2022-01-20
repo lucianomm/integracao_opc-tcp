@@ -33,10 +33,12 @@
 #include "opcerror.h"
 #include "SimpleOPCClient_v3.h"
 #include "SOCAdviseSink.h"
-#include "SOCDataCallback.h"                                                                                                                                                                                                                                                                                                                                                                                                                                                      e "SOCWrapperFunctions.h"
+#include "SOCDataCallback.h"                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+#include "SOCWrapperFunctions.h"
 #include <winsock2.h>
 #include <stdio.h>
 #include <string>
+#include "MessageHandling.h"
 
 #include <windows.h>
 #include <string.h>
@@ -58,6 +60,23 @@
 using namespace std;
 
 /* ======================================================= */
+/* PRAGMA AREA */
+#pragma warning(disable:6031)
+#pragma warning(disable:6385)
+#pragma warning(disable:4996)
+#pragma once
+
+
+/* ======================================================= */
+/* PROTOTIPE AREA */
+
+DWORD WINAPI socket_client(LPVOID index);
+int CheckSocketError(int status, HANDLE hOut);
+void checkAndIncreaseSequenceNumber(const char* message);
+bool sendMessage(string message, SOCKET s);
+bool receiveProcessComputerACK(SOCKET s);
+
+/* ======================================================= */
 /* DEFINE AREA */
 
 #define OPC_SERVER_NAME			L"Matrikon.OPC.Simulation.1"
@@ -66,8 +85,8 @@ using namespace std;
 #define TAM_MSG_DADOS			38
 #define TAM_MSG_CONFIRMACAO		10
 #define TAM_MSG_SOLICITACAO		10
-#define TAM_MSG_SETPOINT		29
-#define TAM_MSG_ACK				10
+#define SETPOINT_MESSAGE_SIZE	29
+#define ACK_MESSAGE_SIZE		10
 
 #define ESC						0x1B
 
@@ -77,6 +96,13 @@ using namespace std;
 #define HLBLUE  FOREGROUND_BLUE  | FOREGROUND_INTENSITY
 #define YELLOW  FOREGROUND_RED   | FOREGROUND_GREEN
 #define CYAN    FOREGROUND_BLUE  | FOREGROUND_GREEN      | FOREGROUND_INTENSITY
+
+#define ANSI_COLOR_RED			"\x1b[31m"
+#define ANSI_COLOR_GREEN		"\x1b[32m"
+#define ANSI_COLOR_YELLOW		"\x1b[33m"
+#define ANSI_COLOR_BLUE			"\x1b[34m"
+
+#define PORT 3842
 
 //#define REMOTE_SERVER_NAME L"your_path"
 
@@ -88,6 +114,7 @@ UINT OPC_DATA_TIME = RegisterClipboardFormat (_T("OPCSTMFORMATDATATIME"));
 
 /* ======================================================= */
 /* GLOBAL VARIABLE */
+
 wchar_t ITEM_ID_TEMP_PANELA[] = L"Random.Real4"; // Temperatura na panela de aco (K)
 wchar_t ITEM_ID_TEMP_CAMARA[] = L"Saw-toothed Waves.Real4"; // Temperatura na camara a vacuo (K)
 wchar_t ITEM_ID_PRES_ARGONIO[] = L"Triangle Waves.Real4"; // Pressao de injecao de gas argonio (mmHg)
@@ -97,7 +124,7 @@ wchar_t ITEM_ID_SP_PRES_ARGONIO[] = L"Bucket Brigade.Real8"; // Set-point de tem
 wchar_t ITEM_ID_SP_TEMP_CAMARA[] = L"Bucket Brigade.Real4"; // Set-point de temperatura na camara a vacuo
 wchar_t ITEM_ID_SP_PRES_CAMARA[] = L"Bucket Brigade.Int4"; // Set-point de pressao na camara a vacuo
 
-int N_SEQ = 0; // Numero referente a mensagem sequencial
+int status, acao, sequenceNumber = 0; 
 
 VARIANT* sLeitura;
 OPCHANDLE* sHandleLeitura;
@@ -114,9 +141,14 @@ OPCHANDLE hITEM_ID_SP_PRES_CAMARA;
 char	msg_dados[TAM_MSG_DADOS + 1] = "NNNNNN$100$NNNN.N$NNNN.N$NNNN.N$NNNN.N",
 		msg_confirmacao[TAM_MSG_CONFIRMACAO + 1] = "NNNNNN$101",
 		msg_solicitacao[TAM_MSG_SOLICITACAO + 1] = "NNNNNN$102",
-		msg_setpoint[TAM_MSG_SETPOINT + 1] = "NNNNNN$103$NNNN.N$NNNN.N$NNNN",
-		msg_ack[TAM_MSG_ACK + 1] = "NNNNNN$104";
+		msg_setpoint[SETPOINT_MESSAGE_SIZE + 1] = "NNNNNN$103$NNNN.N$NNNN.N$NNNN",
+		msg_ack[ACK_MESSAGE_SIZE + 1] = "NNNNNN$104";
 
+string processDataMessage;
+
+SOCKET      s;
+
+HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 HANDLE hMutexStatus;
 HANDLE hMutexSetpoint;
 
@@ -127,13 +159,32 @@ HANDLE hEvent;
 
 void main(void)
 {	
-	SetConsoleTitle("ACIARIA");
-
+	int id = 1;
+	//DWORD dwSocketsClient;
+	//HANDLE hSocketsClient = CreateThread(NULL, 0, socket_client, (LPVOID)id, 0, &dwSocketsClient);
+	//if (dwSocketsClient){
+	//	printf("Thread %d criada com sucesso -> Id = %0d \n", id, dwSocketsClient);
+	//}
 	DWORD ret;
 	int tipoEvento;
 	float SP_PRES_ARGONIO,
 		  SP_TEMP_CAMARA;
 	int   SP_PRES_CAMARA;
+
+	float	aux1,
+			aux2,
+			aux3,
+			aux4;
+	char    c_aux1[7],
+			c_aux2[7],
+			c_aux3[7],
+			c_aux4[7];
+	char    c_aux1_p[] = "NNNN.N",
+			c_aux2_p[] = "NNNN.N",
+			c_aux3_p[] = "NNNN.N",
+			c_aux4_p[] = "NNNN.N";
+	char	c_aux100[4] = "100";
+	char    c_auxNumero[7] = "NNNNNN";
 
 	hMutexStatus = CreateMutex(NULL, FALSE, "MutexStatus");
 	GetLastError();
@@ -219,6 +270,9 @@ void main(void)
 	VARIANT aux;
 	::VariantInit(&aux);
 
+	string processDataMessage = "000001$100$1435.0$1480.0$0002.0$0010.0";
+	MessageHandling processDataMessageOPC(processDataMessage);
+
 	while (true) {
 		bRet = GetMessage(&msg, NULL, 0, 0);
 		if (!bRet) {
@@ -235,6 +289,46 @@ void main(void)
 		for (int i = 0; i < 4; i++) {
 			VarToStr(sLeitura[i], buf);
 		}
+
+		char mensagem[29];
+	
+		VarToStr(sLeitura[0], buf);
+		aux1 = atof(buf);
+		if (aux1 < 0) aux1 = -1 * aux1;
+		if (aux1 > 10000) aux1 = aux1 / 10;
+		sprintf(c_aux1_p, "%07.2f", aux1);
+		if (c_aux1_p[0] == '-') c_aux1_p[0] = '0';
+		sprintf(c_aux1, "%c%c%c%c%c%c", c_aux1_p[0], c_aux1_p[1], c_aux1_p[2], c_aux1_p[3], c_aux1_p[4], c_aux1_p[5]);
+
+		VarToStr(sLeitura[1], buf);
+		aux2 = atof(buf);
+		if (aux2 < 0) aux2 = -1 * aux2;
+		if (aux2 > 10000) aux2 = aux2 / 10;
+		sprintf(c_aux2_p, "%07.2f", aux2);
+		if (c_aux2_p[0] == '-') c_aux2_p[0] = '0';
+		sprintf(c_aux2, "%c%c%c%c%c%c", c_aux2_p[0], c_aux2_p[1], c_aux2_p[2], c_aux2_p[3], c_aux2_p[4], c_aux2_p[5]);
+		VarToStr(sLeitura[2], buf);
+
+		aux3 = atof(buf);
+		if (aux3 < 0) aux3 = -1 * aux3;
+		if (aux3 > 10000) aux3 = aux3 / 10;
+		sprintf(c_aux3_p, "%07.2f", aux3);
+		if (c_aux3_p[0] == '-') c_aux3_p[0] = '0';
+		sprintf(c_aux3, "%c%c%c%c%c%c", c_aux3_p[0], c_aux3_p[1], c_aux3_p[2], c_aux3_p[3], c_aux3_p[4], c_aux3_p[5]);
+		VarToStr(sLeitura[3], buf);
+
+		aux4 = atof(buf);
+		if (aux4 < 0) aux4 = -1 * aux4;
+		if (aux4 > 10000) aux4 = aux4 / 10;
+		sprintf(c_aux4_p, "%07.2f", aux4);
+		if (c_aux4_p[0] == '-') c_aux4_p[0] = '0';
+		sprintf(c_aux4, "%c%c%c%c%c%c", c_aux4_p[0], c_aux4_p[1], c_aux4_p[2], c_aux4_p[3], c_aux4_p[4], c_aux4_p[5]);
+		
+		sprintf(mensagem, "%s$%s$%s$%s$%s$%s", c_auxNumero, c_aux100, c_aux1, c_aux2, c_aux3, c_aux4);
+
+		printf(ANSI_COLOR_GREEN "Mensagem lida por callback do server OPC:\n%s\n\n", mensagem);
+
+		SetEvent(hEvent);
 
 		ret = WaitForSingleObject(hEvent, 1);
 		GetLastError();
@@ -256,26 +350,30 @@ void main(void)
 								(msg_setpoint[26] - '0') * pow(10, 2) +
 								(msg_setpoint[27] - '0') * pow(10, 1) +
 								(msg_setpoint[28] - '0') * pow(10, 0);
-
+			
 			aux.vt = VT_R8;
-			aux.iVal = SP_PRES_ARGONIO;
+			aux.dblVal = SP_PRES_ARGONIO;
 			WriteItem(pIOPCItemMgt, hITEM_ID_SP_PRES_ARGONIO, aux);
-			printf("Set-point de pressao de injecao de gas argonio: %06.1f\n", SP_PRES_ARGONIO);
+			printf(ANSI_COLOR_BLUE "Set-point de pressao de injecao de gas argonio: %06.1f\n", SP_PRES_ARGONIO);
+
 
 			aux.vt = VT_R4;
-			aux.iVal = SP_TEMP_CAMARA;
+			aux.fltVal = SP_TEMP_CAMARA;
 			WriteItem(pIOPCItemMgt, hITEM_ID_SP_TEMP_CAMARA, aux);
-			printf("Set-point de temperatura na camara a vacuo: %06.1f\n", SP_TEMP_CAMARA);
+			printf(ANSI_COLOR_BLUE "Set-point de temperatura na camara a vacuo: %06.1f\n", SP_TEMP_CAMARA);
 			
 			aux.vt = VT_I4;
-			aux.iVal = SP_PRES_CAMARA;
+			aux.intVal = SP_PRES_CAMARA;
 			WriteItem(pIOPCItemMgt, hITEM_ID_SP_PRES_CAMARA, aux);
-			printf("Set-point de pressao na camara a vacuo: %04d\n", SP_PRES_CAMARA);
+			printf(ANSI_COLOR_BLUE "Set-point de pressao na camara a vacuo: %04d\n\n", SP_PRES_CAMARA);
 
 			tipoEvento = -1;
 			ret = 1;
 		}
 		
+		processDataMessageOPC.setProcessDataMessage(aux1, aux2, aux3, aux4);
+		//printf("%s\n", processDataMessageOPC.toString());
+
 		ret = WaitForSingleObject(hMutexStatus, 1);
 		GetLastError();
 
@@ -599,6 +697,128 @@ void RemoveGroup (IOPCServer* pIOPCServer, OPCHANDLE hServerGroup)
 		if (hr == OPC_S_INUSE)
 			printf ("Failed to remove OPC group: object still has references to it.\n");
 		else printf ("Failed to remove OPC group. Error code = %x\n", hr);
+		exit(0);
+	}
+}
+
+/**************************************************************************/
+/* Função para testar o código de erro na comunicação via sockets         */
+/*                                                                        */
+/* Parâmetros de entrada:                                                 */
+/*     status - código devolvido pela função de sockets chamada           */
+/*                                                                        */
+/*                                                                        */
+/* Valor de retorno: 0 se não houve erro                                  */
+/*                  -1 se o erro for recuperável                          */
+/*                  -2 se o erro for irrecuperável                        */
+/**************************************************************************/
+
+int CheckSocketError(int status, HANDLE hOut) {
+	int erro;
+
+	if (status == SOCKET_ERROR) {
+		SetConsoleTextAttribute(hOut, HLRED);
+		erro = WSAGetLastError();
+		if (erro == WSAEWOULDBLOCK) {
+			printf("Timeout na operacao de RECV! errno = %d - reiniciando...\n\n", erro);
+			return(-1); // acarreta reinício da espera de mensagens no programa principal
+		}
+		else if (erro == WSAECONNABORTED) {
+			printf("Conexao abortada pelo cliente TCP - reiniciando...\n\n");
+			return(-1); // acarreta reinício da espera de mensagens no programa principal
+		}
+		else {
+			printf("Erro de conexao! valor = %d\n\n", erro);
+			return (-2); // acarreta encerramento do programa principal
+		}
+	}
+	else if (status == 0) {
+		//Este caso indica que a conexão foi encerrada suavemente ("gracefully")
+		printf("Conexao com cliente TCP encerrada prematuramente! status = %d\n\n", status);
+		return(-1); // acarreta reinício da espera de mensagens no programa principal
+	}
+	else return(0);
+}
+
+void checkAndIncreaseSequenceNumber(const char* message) {
+	int actualSequenceNumber;
+	sscanf(message, "%6d", &actualSequenceNumber);
+	if (++sequenceNumber != actualSequenceNumber) {
+		SetConsoleTextAttribute(hOut, HLRED);
+		printf("Numero sequencial de mensagem incorreto [1]: observado %d ao inves de %d\n",
+			actualSequenceNumber, sequenceNumber);
+		SetConsoleTextAttribute(hOut, WHITE);
+		exit(0);
+	}
+}
+
+bool sendMessage(string message, SOCKET s) {
+	checkAndIncreaseSequenceNumber(message.c_str());
+	status = send(s, message.c_str(), message.size(), 0);
+	return ((acao = CheckSocketError(status, hOut)) != 0);
+}
+
+bool receiveProcessComputerACK(SOCKET s) {
+	char buf[ACK_MESSAGE_SIZE + 1];
+	status = recv(s, buf, ACK_MESSAGE_SIZE, 0);
+	checkAndIncreaseSequenceNumber(buf);
+	if (strncmp(&buf[7], "101", 3) != 0) {
+		SetConsoleTextAttribute(hOut, HLRED);
+		buf[10] = '\0';
+		printf("Mensagem de ACK invalida: recebido %s ao inves de '101'\n\n", &buf[7]);
+		exit(0);
+	}
+	return ((acao = CheckSocketError(status, hOut)) != 0);
+}
+
+DWORD WINAPI socket_client(LPVOID index) {
+	const char* ipaddr = "127.0.0.1";
+	WSADATA     wsaData;
+	SOCKADDR_IN ServerAddr;
+	string processDataExampleMessage = "000001$100$1435.0$1480.0$0002.0$0010.0";
+	MessageHandling processDataExample(processDataExampleMessage);
+
+	status = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (status != 0) {
+		printf("Falha na inicializacao do Winsock 2! Erro  = %d\n", WSAGetLastError());
+		WSACleanup();
+		exit(0);
+	}
+
+	// Cria um novo socket para estabelecer a conexão.
+	s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (s == INVALID_SOCKET) {
+		status = WSAGetLastError();
+		if (status == WSAENETDOWN)
+			printf("Rede ou servidor de sockets inacessíveis!\n");
+		else
+			printf("Falha na rede: codigo de erro = %d\n", status);
+		WSACleanup();
+		exit(0);
+	}
+
+	// Inicializa a estrutura SOCKADDR_IN que será utilizada para
+	// a conexão ao servidor.
+	ServerAddr.sin_family = AF_INET;
+	ServerAddr.sin_port = htons(PORT);
+	ServerAddr.sin_addr.s_addr = inet_addr(ipaddr);
+
+	// Estabelece a conexão com o servidor
+	status = connect(s, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr));
+	if (status == SOCKET_ERROR) {
+		printf("Falha na conexao ao servidor ! Erro  = %d\n", WSAGetLastError());
+		WSACleanup();
+		exit(0);
+	}
+
+	if (sendMessage(processDataExample.toString(),s)) {
+		printf("Falha no envio da mensagem ! Erro  = %d\n", WSAGetLastError());
+		WSACleanup();
+		exit(0);
+	}
+	if (receiveProcessComputerACK(s)) {
+		printf("Falha ao receber ACK ! Erro  = %d\n", WSAGetLastError());
+		WSACleanup();
 		exit(0);
 	}
 }

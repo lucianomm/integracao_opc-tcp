@@ -147,7 +147,7 @@ HRESULT STDMETHODCALLTYPE SOCDataCallback::OnDataChange(
 			break;
 		}
 
-		if (status){
+		if (status){/*
 			printf("Data callback: Value = %s", buffer);
 			quality = pwQualities [dwItem] & OPC_QUALITY_MASK;
 			if (quality == OPC_QUALITY_GOOD)
@@ -166,7 +166,7 @@ HRESULT STDMETHODCALLTYPE SOCDataCallback::OnDataChange(
 			FileTimeToSystemTime(&lft, &st);
 			GetDateFormat(LOCALE_SYSTEM_DEFAULT, DATE_SHORTDATE, &st, NULL, szLocalDate, 255);
 			GetTimeFormat(LOCALE_SYSTEM_DEFAULT, 0, &st, NULL, szLocalTime, 255);
-			printf(" Time: %s %s\n", szLocalDate, szLocalTime);
+			printf(" Time: %s %s\n", szLocalDate, szLocalTime);*/
 		}
 		else printf ("IOPCDataCallback: Unsupported item type\n");
 	}
