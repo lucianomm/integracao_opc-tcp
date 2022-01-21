@@ -126,8 +126,6 @@ int status, acao, sequenceNumber = 1;
 VARIANT* sLeitura;
 OPCHANDLE* sHandleLeitura;
 
-char* mensagem = new char;
-
 IOPCServer* pIOPCServer = NULL;   //pointer to IOPServer interface
 IOPCItemMgt* pIOPCItemMgt = NULL; //pointer to IOPCItemMgt interface
 
@@ -176,16 +174,16 @@ void opcClient()
 			aux2,
 			aux3,
 			aux4;
-	char    c_aux1[7],
-			c_aux2[7],
-			c_aux3[7],
-			c_aux4[7];
-	char    c_aux1_p[] = "NNNN.N",
-			c_aux2_p[] = "NNNN.N",
-			c_aux3_p[] = "NNNN.N",
-			c_aux4_p[] = "NNNN.N";
-	char	c_aux100[4] = "100";
-	char    c_auxNumero[7] = "NNNNNN";
+	char    c_aux1[8],
+			c_aux2[8],
+			c_aux3[8],
+			c_aux4[8];
+	char    c_aux1_p[8] = "NNNN.N",
+			c_aux2_p[8] = "NNNN.N",
+			c_aux3_p[8] = "NNNN.N",
+			c_aux4_p[8] = "NNNN.N";
+	char	c_aux100[5] = "100";
+	char    c_auxNumero[8] = "NNNNNN";
 
 	OPCHANDLE hServerGroup; // server handle to the group
 	
@@ -279,7 +277,7 @@ void opcClient()
 			VarToStr(sLeitura[i], buf);
 		}
 
-		char mensagem[29];
+		char mensagem[30];
 	
 		VarToStr(sLeitura[0], buf);
 		aux1 = atof(buf);
@@ -313,9 +311,8 @@ void opcClient()
 		if (c_aux4_p[0] == '-') c_aux4_p[0] = '0';
 		sprintf(c_aux4, "%c%c%c%c%c%c", c_aux4_p[0], c_aux4_p[1], c_aux4_p[2], c_aux4_p[3], c_aux4_p[4], c_aux4_p[5]);
 		
-		sprintf(mensagem, "%s$%s$%s$%s$%s$%s", c_auxNumero, c_aux100, c_aux1, c_aux2, c_aux3, c_aux4);
-
-		printf(ANSI_COLOR_GREEN "Mensagem lida por callback do server OPC:\n%s\n\n", mensagem);
+		printf(ANSI_COLOR_GREEN "Mensagem lida por callback do server OPC:");
+		printf("%s$%s$%s$%s$%s$%s\n\n ", c_auxNumero, c_aux100, c_aux1, c_aux2, c_aux3, c_aux4);
 
 		ret = WaitForSingleObject(shouldSetVariables, 10);
 
@@ -378,6 +375,8 @@ void opcClient()
 	//close the COM library:
 	printf ("Releasing the COM environment...\n");
 	CoUninitialize();
+
+	return;
 }
 
 ////////////////////////////////////////////////////////////////////
