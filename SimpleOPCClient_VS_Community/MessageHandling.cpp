@@ -8,6 +8,12 @@ using namespace std;
 #define REAL_FIELD_SIZE 6
 #define PROCESS_DATA_MESSAGE_CODE 100
 #define SETPOINTS_MESSAGE_CODE 103
+#define CONFIRM_MESSAGE_CODE 101
+#define SET_POINTS_REQUEST_CODE 102 
+#define ACK_CODE 104
+string SetPointRequestMessage(int sequenceNumber) {
+	return to_string(sequenceNumber) + '$' + "102";
+}
 void MessageHandling::ConvertMessageHeader() {
 
 	messageHeader.SequenceNumber = stoi(rawMessage.substr(0, rawMessage.find('$')));
@@ -46,17 +52,38 @@ void MessageHandling::ConvertProcessDataMessage() {
 	return;
 }
 
+//Constructor for ProcessMessage only
+MessageHandling::MessageHandling() {
+	isProcessDataMessage = true;
+	messageHeader.MessageCode = 100;
+	messageHeader.SequenceNumber = 0;
+}
+
 //Constructor for Raw message string
 MessageHandling::MessageHandling(string RawMessage) : rawMessage(RawMessage) {
 	ConvertMessageHeader();
-	if (messageHeader.MessageCode == PROCESS_DATA_MESSAGE_CODE) {
+	switch (messageHeader.MessageCode)
+	{
+	case PROCESS_DATA_MESSAGE_CODE:
 		isProcessDataMessage = true;
 		ConvertProcessDataMessage();
-	}
-	else if(messageHeader.MessageCode == SETPOINTS_MESSAGE_CODE)
-	{
+		break;
+	case SETPOINTS_MESSAGE_CODE:
 		isSetPointsMessage = true;
 		ConvertSetPointsMessage();
+		break;
+	case CONFIRM_MESSAGE_CODE:
+		isConfirmMessage = true;
+		break;
+	case SET_POINTS_REQUEST_CODE:
+		isSetPointRequest = true;
+		break;
+	case ACK_CODE:
+		isAckCode = true;
+		break;
+	default:
+		throw exception("Message code invalid");
+		break;
 	}
 }
 
@@ -74,12 +101,10 @@ void MessageHandling::UpdateMessageFromString(string RawMessage){
 	}
 }
 
-void MessageHandling::UpdateProcessData(int sequenceNumber, int messageCode, double ladleTemperature,
+void MessageHandling::UpdateProcessData(int sequenceNumber, double ladleTemperature,
 	double vaccumChamberTemperature, double gasInjectionPressure, double vaccumChamberPressure) 
 {
 	messageHeader.SequenceNumber = sequenceNumber;
-
-	messageHeader.MessageCode = messageCode;
 
 	processDataMessage.LadleTemperature = ladleTemperature;
 
@@ -125,7 +150,7 @@ string MessageHandling::SetPointsMessagetoString() {
 	return message;
 }
 
-string MessageHandling::ACKMessageToString() {
+string MessageHandling::HeaderMessageToString() {
 	string message =
 		to_string(messageHeader.SequenceNumber) + '$' +
 		to_string(messageHeader.MessageCode);
@@ -135,5 +160,5 @@ string MessageHandling::ACKMessageToString() {
 string MessageHandling::toString() {
 	if (isProcessDataMessage) return ProcessDataMessageToString();
 	else if (isSetPointsMessage) return SetPointsMessagetoString();
-	else return ACKMessageToString();
+	else return HeaderMessageToString();
 }

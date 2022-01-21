@@ -41,6 +41,7 @@
 #include "MessageHandling.h"
 
 #include <windows.h>
+#include <thread>
 #include <string.h>
 #include <stdlib.h>
 #include <conio.h>		
@@ -73,8 +74,8 @@ using namespace std;
 DWORD WINAPI socket_client(LPVOID index);
 int CheckSocketError(int status, HANDLE hOut);
 void checkAndIncreaseSequenceNumber(const char* message);
-bool sendMessage(string message, SOCKET s);
-bool receiveProcessComputerACK(SOCKET s);
+bool sendMessage(string message);
+bool receiveProcessComputerACK();
 
 /* ======================================================= */
 /* DEFINE AREA */
@@ -102,7 +103,7 @@ bool receiveProcessComputerACK(SOCKET s);
 #define ANSI_COLOR_YELLOW		"\x1b[33m"
 #define ANSI_COLOR_BLUE			"\x1b[34m"
 
-#define PORT 3842
+#define PORT 3445
 
 //#define REMOTE_SERVER_NAME L"your_path"
 
@@ -124,7 +125,7 @@ wchar_t ITEM_ID_SP_PRES_ARGONIO[] = L"Bucket Brigade.Real8"; // Set-point de tem
 wchar_t ITEM_ID_SP_TEMP_CAMARA[] = L"Bucket Brigade.Real4"; // Set-point de temperatura na camara a vacuo
 wchar_t ITEM_ID_SP_PRES_CAMARA[] = L"Bucket Brigade.Int4"; // Set-point de pressao na camara a vacuo
 
-int status, acao, sequenceNumber = 0; 
+int status, acao, sequenceNumber = 1; 
 
 VARIANT* sLeitura;
 OPCHANDLE* sHandleLeitura;
@@ -141,23 +142,28 @@ OPCHANDLE hITEM_ID_SP_PRES_CAMARA;
 char	msg_dados[TAM_MSG_DADOS + 1] = "NNNNNN$100$NNNN.N$NNNN.N$NNNN.N$NNNN.N",
 		msg_confirmacao[TAM_MSG_CONFIRMACAO + 1] = "NNNNNN$101",
 		msg_solicitacao[TAM_MSG_SOLICITACAO + 1] = "NNNNNN$102",
-		msg_setpoint[SETPOINT_MESSAGE_SIZE + 1] = "NNNNNN$103$NNNN.N$NNNN.N$NNNN",
+		msg_setpoint[SETPOINT_MESSAGE_SIZE + 1] = "000000$103$0000.0$0000.0$0000",
 		msg_ack[ACK_MESSAGE_SIZE + 1] = "NNNNNN$104";
 
-string processDataMessage;
+// Variável de dados do processo
+MessageHandling processDataMessageOPC;
+MessageHandling setpointsMessageOPC(msg_setpoint);
 
+// socket utilizado para comunicação tcp/ip
 SOCKET      s;
 
 HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 HANDLE hMutexStatus;
 HANDLE hMutexSetpoint;
+HANDLE hMutexSendAndReceiveMessage;
+HANDLE hMutexProcessData;
 
-HANDLE hEvent;
+bool shouldSetVariables = false;
 
 //////////////////////////////////////////////////////////////////////
 // Read the value of an item on an OPC server. 
 
-void main(void)
+void opcClient()
 {	
 	int id = 1;
 	//DWORD dwSocketsClient;
@@ -192,7 +198,10 @@ void main(void)
 	hMutexSetpoint = CreateMutex(NULL, FALSE, "MutexSetpoint");
 	GetLastError();
 
-	hEvent = CreateEvent(NULL, FALSE, FALSE, "Evento_s");
+	hMutexSendAndReceiveMessage = CreateMutex(NULL, FALSE, "hMutexMessageNumber");
+	GetLastError();
+
+	hMutexProcessData = CreateMutex(NULL, FALSE, "hMutexProcessData");
 	GetLastError();
 
 	OPCHANDLE hServerGroup; // server handle to the group
@@ -270,9 +279,6 @@ void main(void)
 	VARIANT aux;
 	::VariantInit(&aux);
 
-	string processDataMessage = "000001$100$1435.0$1480.0$0002.0$0010.0";
-	MessageHandling processDataMessageOPC(processDataMessage);
-
 	while (true) {
 		bRet = GetMessage(&msg, NULL, 0, 0);
 		if (!bRet) {
@@ -328,28 +334,10 @@ void main(void)
 
 		printf(ANSI_COLOR_GREEN "Mensagem lida por callback do server OPC:\n%s\n\n", mensagem);
 
-		SetEvent(hEvent);
-
-		ret = WaitForSingleObject(hEvent, 1);
-		GetLastError();
-
-		tipoEvento = ret - WAIT_OBJECT_0;
-
-		if (tipoEvento == 0) {
-			SP_PRES_ARGONIO  =	(msg_setpoint[11] - '0') * pow(10, 3) +
-								(msg_setpoint[12] - '0') * pow(10, 2) +
-								(msg_setpoint[13] - '0') * pow(10, 1) +
-								(msg_setpoint[14] - '0') * pow(10, 0) +
-								(msg_setpoint[16] - '0') * pow(10, -1);
-			SP_TEMP_CAMARA   =	(msg_setpoint[18] - '0') * pow(10, 3) +
-								(msg_setpoint[19] - '0') * pow(10, 2) +
-								(msg_setpoint[20] - '0') * pow(10, 1) +
-								(msg_setpoint[21] - '0') * pow(10, 0) +
-								(msg_setpoint[23] - '0') * pow(10, -1);
-			SP_PRES_CAMARA   =	(msg_setpoint[25] - '0') * pow(10, 3) +
-								(msg_setpoint[26] - '0') * pow(10, 2) +
-								(msg_setpoint[27] - '0') * pow(10, 1) +
-								(msg_setpoint[28] - '0') * pow(10, 0);
+		if (shouldSetVariables) {
+			SP_PRES_ARGONIO = setpointsMessageOPC.getGasInjectionPressureSP();
+			SP_TEMP_CAMARA = setpointsMessageOPC.getVaccumChamberTemperatureSP();
+			SP_PRES_CAMARA   =	setpointsMessageOPC.getVaccumChamberPressureSP();
 			
 			aux.vt = VT_R8;
 			aux.dblVal = SP_PRES_ARGONIO;
@@ -367,12 +355,12 @@ void main(void)
 			WriteItem(pIOPCItemMgt, hITEM_ID_SP_PRES_CAMARA, aux);
 			printf(ANSI_COLOR_BLUE "Set-point de pressao na camara a vacuo: %04d\n\n", SP_PRES_CAMARA);
 
-			tipoEvento = -1;
-			ret = 1;
+			shouldSetVariables = false;
 		}
-		
+		WaitForSingleObject(hMutexProcessData, INFINITE);
+		GetLastError();
 		processDataMessageOPC.setProcessDataMessage(aux1, aux2, aux3, aux4);
-		//printf("%s\n", processDataMessageOPC.toString());
+		ReleaseMutex(hMutexProcessData);
 
 		ret = WaitForSingleObject(hMutexStatus, 1);
 		GetLastError();
@@ -423,7 +411,6 @@ void main(void)
 
 	CloseHandle(hMutexStatus);
 	CloseHandle(hMutexSetpoint);
-	CloseHandle(hEvent);
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -743,7 +730,7 @@ int CheckSocketError(int status, HANDLE hOut) {
 void checkAndIncreaseSequenceNumber(const char* message) {
 	int actualSequenceNumber;
 	sscanf(message, "%6d", &actualSequenceNumber);
-	if (++sequenceNumber != actualSequenceNumber) {
+	if (sequenceNumber++ != actualSequenceNumber) {
 		SetConsoleTextAttribute(hOut, HLRED);
 		printf("Numero sequencial de mensagem incorreto [1]: observado %d ao inves de %d\n",
 			actualSequenceNumber, sequenceNumber);
@@ -752,16 +739,19 @@ void checkAndIncreaseSequenceNumber(const char* message) {
 	}
 }
 
-bool sendMessage(string message, SOCKET s) {
+bool sendMessage(string message) {
 	checkAndIncreaseSequenceNumber(message.c_str());
 	status = send(s, message.c_str(), message.size(), 0);
 	return ((acao = CheckSocketError(status, hOut)) != 0);
 }
 
-bool receiveProcessComputerACK(SOCKET s) {
+bool receiveProcessComputerACK() {
 	char buf[ACK_MESSAGE_SIZE + 1];
+	WaitForSingleObject(hMutexSendAndReceiveMessage, INFINITE);
+	GetLastError();
 	status = recv(s, buf, ACK_MESSAGE_SIZE, 0);
 	checkAndIncreaseSequenceNumber(buf);
+	ReleaseMutex(hMutexSendAndReceiveMessage);
 	if (strncmp(&buf[7], "101", 3) != 0) {
 		SetConsoleTextAttribute(hOut, HLRED);
 		buf[10] = '\0';
@@ -771,12 +761,53 @@ bool receiveProcessComputerACK(SOCKET s) {
 	return ((acao = CheckSocketError(status, hOut)) != 0);
 }
 
-DWORD WINAPI socket_client(LPVOID index) {
+void receiveSetpoints() {
+	WaitForSingleObject(hMutexSetpoint, INFINITE);
+	status = recv(s, msg_setpoint, SETPOINT_MESSAGE_SIZE, 0);
+	checkAndIncreaseSequenceNumber(msg_setpoint);
+	if (strncmp(&msg_setpoint[7], "103", 3) != 0) {
+		SetConsoleTextAttribute(hOut, HLRED);
+		msg_setpoint[10] = '\0';
+		printf("Mensagem de Setpoints invalida: recebido %s ao inves de '103'\n\n", &msg_setpoint[7]);
+		exit(0);
+	}
+	setpointsMessageOPC.UpdateMessageFromString(msg_setpoint);
+	shouldSetVariables = true;
+	ReleaseMutex(hMutexSendAndReceiveMessage);
+}
+
+void setpointsRequest() {
+	if (sendMessage(SetPointRequestMessage(sequenceNumber))) {
+		printf("Erro ao enviar requisição de Set Points");
+		exit(0);
+	}
+	receiveSetpoints();
+}
+
+void CALLBACK sendProcessDataMessage(PVOID lpParameter, BOOLEAN TimerOrWaitFired) {
+	WaitForSingleObject(hMutexSendAndReceiveMessage, INFINITE);
+	GetLastError();
+	WaitForSingleObject(hMutexProcessData, INFINITE);
+	GetLastError();
+	processDataMessageOPC.setSequenceNumber(sequenceNumber);
+	sendMessage(processDataMessageOPC.toString());
+	if (receiveProcessComputerACK()) {
+		printf("Erro de socket ao receber ACK");
+		exit(0);
+	}
+	ReleaseMutex(hMutexProcessData);
+	ReleaseMutex(hMutexSendAndReceiveMessage);
+}
+
+void socketClient(void) {
+
+	/*************************************************
+		SETTING UP SOCKET CLIENT
+	*************************************************/
+
 	const char* ipaddr = "127.0.0.1";
 	WSADATA     wsaData;
 	SOCKADDR_IN ServerAddr;
-	string processDataExampleMessage = "000001$100$1435.0$1480.0$0002.0$0010.0";
-	MessageHandling processDataExample(processDataExampleMessage);
 
 	status = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (status != 0) {
@@ -811,14 +842,43 @@ DWORD WINAPI socket_client(LPVOID index) {
 		exit(0);
 	}
 
-	if (sendMessage(processDataExample.toString(),s)) {
-		printf("Falha no envio da mensagem ! Erro  = %d\n", WSAGetLastError());
-		WSACleanup();
+	/*************************************************
+	CREATING TIMERS
+	*************************************************/
+
+	HANDLE hTimer = NULL;
+	HANDLE hTimerQueue = NULL;
+
+	// Create the timer queue.
+	hTimerQueue = CreateTimerQueue();
+	if (NULL == hTimerQueue)
+	{
+		printf("CreateTimerQueue failed (%d)\n", GetLastError());
 		exit(0);
 	}
-	if (receiveProcessComputerACK(s)) {
-		printf("Falha ao receber ACK ! Erro  = %d\n", WSAGetLastError());
-		WSACleanup();
+
+	// Sends process data message every 2 seconds
+	if (!CreateTimerQueueTimer(&hTimer, hTimerQueue,
+		(WAITORTIMERCALLBACK)sendProcessDataMessage, NULL, 0, 2000, 0))
+	{
+		printf("CreateTimerQueueTimer failed (%d)\n", GetLastError());
 		exit(0);
 	}
+
+	/*************************************************
+	Loop for reading keyboard keys
+	*************************************************/
+	while (1) { // TODO: while ESC not typed
+		if (false) { // TODO: if 's' is pressed
+			setpointsRequest();
+			receiveSetpoints();
+		}
+	}
+}
+
+void main(void) {
+	thread opc_thread(opcClient);
+	thread socket(socketClient);
+	opc_thread.join();
+	socket.join();
 }

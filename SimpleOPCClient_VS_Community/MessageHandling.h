@@ -31,6 +31,8 @@ Message structure should follow this schematic:
 #ifndef MESSAGEHANDLING_H
 #define MESSAGEHANDLING_H
 
+std::string SetPointRequestMessage(int sequenceNumber);
+
 class MessageHandling {
 private:
 	struct MessageDataStructure
@@ -51,7 +53,8 @@ private:
 		double VaccumChamberTemperatureSP;
 		int VaccumChamberPressureSP;
 	};
-	bool isProcessDataMessage = false, isSetPointsMessage = false;
+	bool isProcessDataMessage = false, isSetPointsMessage = false, 
+		isConfirmMessage = false, isSetPointRequest = false, isAckCode = false;
 	ProcessDataMessage processDataMessage;
 	MessageDataStructure messageHeader;
 	SetPointsMessage setPointsMessage;
@@ -59,13 +62,13 @@ private:
 	void ConvertMessageHeader();
 	std::string ProcessDataMessageToString();
 	std::string SetPointsMessagetoString();
-	std::string ACKMessageToString();
+	std::string HeaderMessageToString();
 	std::string MessageHeaderToString();
 	std::string RealToString(double real);
 	void ConvertProcessDataMessage();
 	void ConvertSetPointsMessage();
 public:
-	int getSequenceNumber() { return messageHeader.SequenceNumber; }
+	void setSequenceNumber(int sequenceNumber) { messageHeader.SequenceNumber = sequenceNumber; }
 	int getMessageCode() { return messageHeader.MessageCode; }
 	double getLadleTemperature() { return processDataMessage.LadleTemperature; }
 	double getVaccumChamberTemperature() { return processDataMessage.VaccumChamberTemperature; }
@@ -75,9 +78,10 @@ public:
 	double getVaccumChamberTemperatureSP() { return setPointsMessage.VaccumChamberTemperatureSP; }
 	int getVaccumChamberPressureSP() { return setPointsMessage.VaccumChamberPressureSP; }
 	MessageHandling(std::string RawMessage);
+	MessageHandling();
 	void UpdateMessageFromString(std::string RawMessage);
-	void UpdateProcessData(int sequenceNumber, int messageCode, double ladleTemperature,
-		double vaccumChamberTemperature, double gasInjectionPressure, double vaccumChamberPressure);
+	void UpdateProcessData(int sequenceNumber, double ladleTemperature,	double vaccumChamberTemperature,
+		double gasInjectionPressure, double vaccumChamberPressure);
 	void setProcessDataMessage(double setLadleTemperature,
 							   double setVaccumChamberTemperature,
 		                       double setGasInjectionPressure,
