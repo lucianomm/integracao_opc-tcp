@@ -83,9 +83,6 @@ bool receiveProcessComputerACK();
 #define OPC_SERVER_NAME			L"Matrikon.OPC.Simulation.1"
 #define	VT						VT_R4
 
-#define TAM_MSG_DADOS			38
-#define TAM_MSG_CONFIRMACAO		10
-#define TAM_MSG_SOLICITACAO		10
 #define SETPOINT_MESSAGE_SIZE	29
 #define ACK_MESSAGE_SIZE		10
 
@@ -103,7 +100,7 @@ bool receiveProcessComputerACK();
 #define ANSI_COLOR_YELLOW		"\x1b[33m"
 #define ANSI_COLOR_BLUE			"\x1b[34m"
 
-#define PORT 3445
+#define PORT 3842
 
 //#define REMOTE_SERVER_NAME L"your_path"
 
@@ -139,11 +136,7 @@ OPCHANDLE hITEM_ID_SP_PRES_ARGONIO;
 OPCHANDLE hITEM_ID_SP_TEMP_CAMARA;
 OPCHANDLE hITEM_ID_SP_PRES_CAMARA;
 
-char	msg_dados[TAM_MSG_DADOS + 1] = "NNNNNN$100$NNNN.N$NNNN.N$NNNN.N$NNNN.N",
-		msg_confirmacao[TAM_MSG_CONFIRMACAO + 1] = "NNNNNN$101",
-		msg_solicitacao[TAM_MSG_SOLICITACAO + 1] = "NNNNNN$102",
-		msg_setpoint[SETPOINT_MESSAGE_SIZE + 1] = "000000$103$0000.0$0000.0$0000",
-		msg_ack[ACK_MESSAGE_SIZE + 1] = "NNNNNN$104";
+char	msg_setpoint[SETPOINT_MESSAGE_SIZE + 1] = "000000$103$0000.0$0000.0$0000";
 
 // Variável de dados do processo
 MessageHandling processDataMessageOPC;
@@ -153,12 +146,12 @@ MessageHandling setpointsMessageOPC(msg_setpoint);
 SOCKET      s;
 
 HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-HANDLE hMutexStatus;
-HANDLE hMutexSetpoint;
-HANDLE hMutexSendAndReceiveMessage;
-HANDLE hMutexProcessData;
+mutex hMutexStatus;
+mutex hMutexSetpoint;
+mutex hMutexSendAndReceiveMessage;
+mutex mutexProcessData;
 
-bool shouldSetVariables = false;
+HANDLE shouldSetVariables;
 
 //////////////////////////////////////////////////////////////////////
 // Read the value of an item on an OPC server. 
@@ -172,7 +165,7 @@ void opcClient()
 	//	printf("Thread %d criada com sucesso -> Id = %0d \n", id, dwSocketsClient);
 	//}
 	DWORD ret;
-	int tipoEvento;
+	DWORD tipoEvento;
 	float SP_PRES_ARGONIO,
 		  SP_TEMP_CAMARA;
 	int   SP_PRES_CAMARA;
@@ -191,18 +184,6 @@ void opcClient()
 			c_aux4_p[] = "NNNN.N";
 	char	c_aux100[4] = "100";
 	char    c_auxNumero[7] = "NNNNNN";
-
-	hMutexStatus = CreateMutex(NULL, FALSE, "MutexStatus");
-	GetLastError();
-
-	hMutexSetpoint = CreateMutex(NULL, FALSE, "MutexSetpoint");
-	GetLastError();
-
-	hMutexSendAndReceiveMessage = CreateMutex(NULL, FALSE, "hMutexMessageNumber");
-	GetLastError();
-
-	hMutexProcessData = CreateMutex(NULL, FALSE, "hMutexProcessData");
-	GetLastError();
 
 	OPCHANDLE hServerGroup; // server handle to the group
 	
@@ -334,7 +315,9 @@ void opcClient()
 
 		printf(ANSI_COLOR_GREEN "Mensagem lida por callback do server OPC:\n%s\n\n", mensagem);
 
-		if (shouldSetVariables) {
+		ret = WaitForSingleObject(shouldSetVariables, 10);
+
+		if(!(ret - WAIT_OBJECT_0)) {
 			SP_PRES_ARGONIO = setpointsMessageOPC.getGasInjectionPressureSP();
 			SP_TEMP_CAMARA = setpointsMessageOPC.getVaccumChamberTemperatureSP();
 			SP_PRES_CAMARA   =	setpointsMessageOPC.getVaccumChamberPressureSP();
@@ -342,41 +325,27 @@ void opcClient()
 			aux.vt = VT_R8;
 			aux.dblVal = SP_PRES_ARGONIO;
 			WriteItem(pIOPCItemMgt, hITEM_ID_SP_PRES_ARGONIO, aux);
-			printf(ANSI_COLOR_BLUE "Set-point de pressao de injecao de gas argonio: %06.1f\n", SP_PRES_ARGONIO);
+			printf(ANSI_COLOR_YELLOW "Set-point de pressao de injecao de gas argonio: %06.1f\n", SP_PRES_ARGONIO);
 
 
 			aux.vt = VT_R4;
 			aux.fltVal = SP_TEMP_CAMARA;
 			WriteItem(pIOPCItemMgt, hITEM_ID_SP_TEMP_CAMARA, aux);
-			printf(ANSI_COLOR_BLUE "Set-point de temperatura na camara a vacuo: %06.1f\n", SP_TEMP_CAMARA);
+			printf(ANSI_COLOR_YELLOW "Set-point de temperatura na camara a vacuo: %06.1f\n", SP_TEMP_CAMARA);
 			
 			aux.vt = VT_I4;
 			aux.intVal = SP_PRES_CAMARA;
 			WriteItem(pIOPCItemMgt, hITEM_ID_SP_PRES_CAMARA, aux);
-			printf(ANSI_COLOR_BLUE "Set-point de pressao na camara a vacuo: %04d\n\n", SP_PRES_CAMARA);
-
-			shouldSetVariables = false;
+			printf(ANSI_COLOR_YELLOW "Set-point de pressao na camara a vacuo: %04d\n\n", SP_PRES_CAMARA);
 		}
-		WaitForSingleObject(hMutexProcessData, INFINITE);
+		mutexProcessData.lock();
 		GetLastError();
 		processDataMessageOPC.setProcessDataMessage(aux1, aux2, aux3, aux4);
-		ReleaseMutex(hMutexProcessData);
+		mutexProcessData.unlock();
 
-		ret = WaitForSingleObject(hMutexStatus, 1);
-		GetLastError();
+		hMutexStatus.lock();
 
-		tipoEvento = ret - WAIT_OBJECT_0;
-
-		if (tipoEvento == 0) {
-			for (int i = 11; i <= TAM_MSG_DADOS; i++) {
-				msg_dados[i] = mensagem[i-11];
-			}
-
-			tipoEvento = -1;
-			ret = 1;
-		}
-
-		ret = ReleaseMutex(hMutexStatus);
+		hMutexStatus.unlock();
 		GetLastError();
 	}
 
@@ -408,9 +377,6 @@ void opcClient()
 	//close the COM library:
 	printf ("Releasing the COM environment...\n");
 	CoUninitialize();
-
-	CloseHandle(hMutexStatus);
-	CloseHandle(hMutexSetpoint);
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -747,11 +713,8 @@ bool sendMessage(string message) {
 
 bool receiveProcessComputerACK() {
 	char buf[ACK_MESSAGE_SIZE + 1];
-	WaitForSingleObject(hMutexSendAndReceiveMessage, INFINITE);
-	GetLastError();
 	status = recv(s, buf, ACK_MESSAGE_SIZE, 0);
 	checkAndIncreaseSequenceNumber(buf);
-	ReleaseMutex(hMutexSendAndReceiveMessage);
 	if (strncmp(&buf[7], "101", 3) != 0) {
 		SetConsoleTextAttribute(hOut, HLRED);
 		buf[10] = '\0';
@@ -762,7 +725,6 @@ bool receiveProcessComputerACK() {
 }
 
 void receiveSetpoints() {
-	WaitForSingleObject(hMutexSetpoint, INFINITE);
 	status = recv(s, msg_setpoint, SETPOINT_MESSAGE_SIZE, 0);
 	checkAndIncreaseSequenceNumber(msg_setpoint);
 	if (strncmp(&msg_setpoint[7], "103", 3) != 0) {
@@ -772,22 +734,25 @@ void receiveSetpoints() {
 		exit(0);
 	}
 	setpointsMessageOPC.UpdateMessageFromString(msg_setpoint);
-	shouldSetVariables = true;
-	ReleaseMutex(hMutexSendAndReceiveMessage);
+	ReleaseSemaphore(shouldSetVariables, 1, NULL); // Letting OPC know it can set variables
 }
 
-void setpointsRequest() {
+void setpointsRequestAndReceive() {
 	if (sendMessage(SetPointRequestMessage(sequenceNumber))) {
 		printf("Erro ao enviar requisição de Set Points");
 		exit(0);
 	}
 	receiveSetpoints();
+	if (sendMessage(SetPointAckMessage(sequenceNumber))) {
+		printf("Erro ao enviar requisição de Set Points");
+		exit(0);
+	}
 }
 
 void CALLBACK sendProcessDataMessage(PVOID lpParameter, BOOLEAN TimerOrWaitFired) {
-	WaitForSingleObject(hMutexSendAndReceiveMessage, INFINITE);
+	hMutexSendAndReceiveMessage.lock();
 	GetLastError();
-	WaitForSingleObject(hMutexProcessData, INFINITE);
+	mutexProcessData.lock();
 	GetLastError();
 	processDataMessageOPC.setSequenceNumber(sequenceNumber);
 	sendMessage(processDataMessageOPC.toString());
@@ -795,8 +760,8 @@ void CALLBACK sendProcessDataMessage(PVOID lpParameter, BOOLEAN TimerOrWaitFired
 		printf("Erro de socket ao receber ACK");
 		exit(0);
 	}
-	ReleaseMutex(hMutexProcessData);
-	ReleaseMutex(hMutexSendAndReceiveMessage);
+	mutexProcessData.unlock();
+	hMutexSendAndReceiveMessage.unlock();
 }
 
 void socketClient(void) {
@@ -868,15 +833,37 @@ void socketClient(void) {
 	/*************************************************
 	Loop for reading keyboard keys
 	*************************************************/
+	char keyPressed;
 	while (1) { // TODO: while ESC not typed
-		if (false) { // TODO: if 's' is pressed
-			setpointsRequest();
-			receiveSetpoints();
+		keyPressed = _getch();
+		if (keyPressed == 'S' || keyPressed == 's') {
+			hMutexSendAndReceiveMessage.lock();
+			GetLastError();
+			setpointsRequestAndReceive();
+			hMutexSendAndReceiveMessage.unlock();
 		}
 	}
 }
 
+/*
+	- Create mutexes
+	- Start OPC client thread
+	- Start socket client thread
+*/
 void main(void) {
+	
+	shouldSetVariables = CreateSemaphore(
+		NULL,
+		0,
+		1,
+		NULL
+	);
+
+	if (shouldSetVariables == NULL)
+	{
+		printf("CreateMutex error: %d\n", GetLastError());
+		return;
+	}
 	thread opc_thread(opcClient);
 	thread socket(socketClient);
 	opc_thread.join();

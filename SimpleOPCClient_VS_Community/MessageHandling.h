@@ -32,6 +32,7 @@ Message structure should follow this schematic:
 #define MESSAGEHANDLING_H
 
 std::string SetPointRequestMessage(int sequenceNumber);
+std::string SetPointAckMessage(int sequenceNumber);
 
 class MessageHandling {
 private:
@@ -62,7 +63,6 @@ private:
 	void ConvertMessageHeader();
 	std::string ProcessDataMessageToString();
 	std::string SetPointsMessagetoString();
-	std::string HeaderMessageToString();
 	std::string MessageHeaderToString();
 	std::string RealToString(double real);
 	void ConvertProcessDataMessage();

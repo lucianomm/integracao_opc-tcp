@@ -12,8 +12,15 @@ using namespace std;
 #define SET_POINTS_REQUEST_CODE 102 
 #define ACK_CODE 104
 string SetPointRequestMessage(int sequenceNumber) {
-	return to_string(sequenceNumber) + '$' + "102";
+	string strSequenceNumber = to_string(sequenceNumber);
+	return string(SEQUENCE_FIELD_SIZE - strSequenceNumber.length(), '0').append(strSequenceNumber) + '$' + "102";
 }
+
+string SetPointAckMessage(int sequenceNumber) {
+	string strSequenceNumber = to_string(sequenceNumber);
+	return string(SEQUENCE_FIELD_SIZE - strSequenceNumber.length(), '0').append(strSequenceNumber) + '$' + "104";
+}
+
 void MessageHandling::ConvertMessageHeader() {
 
 	messageHeader.SequenceNumber = stoi(rawMessage.substr(0, rawMessage.find('$')));
@@ -130,7 +137,6 @@ string MessageHandling::RealToString(double real) {
 }
 
 string MessageHandling::ProcessDataMessageToString() {
-	string sequenceNumber = to_string(messageHeader.SequenceNumber);
 	string message =
 		MessageHeaderToString() + '$' +
 		RealToString(processDataMessage.LadleTemperature) + '$' +
@@ -150,15 +156,8 @@ string MessageHandling::SetPointsMessagetoString() {
 	return message;
 }
 
-string MessageHandling::HeaderMessageToString() {
-	string message =
-		to_string(messageHeader.SequenceNumber) + '$' +
-		to_string(messageHeader.MessageCode);
-	return message;
-}
-
 string MessageHandling::toString() {
 	if (isProcessDataMessage) return ProcessDataMessageToString();
 	else if (isSetPointsMessage) return SetPointsMessagetoString();
-	else return HeaderMessageToString();
+	else return MessageHeaderToString();
 }
