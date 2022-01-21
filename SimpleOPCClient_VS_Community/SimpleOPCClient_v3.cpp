@@ -71,7 +71,6 @@ using namespace std;
 /* ======================================================= */
 /* PROTOTIPE AREA */
 
-DWORD WINAPI socket_client(LPVOID index);
 int CheckSocketError(int status, HANDLE hOut);
 void checkAndIncreaseSequenceNumber(const char* message);
 bool sendMessage(string message);
@@ -140,18 +139,22 @@ char	msg_setpoint[SETPOINT_MESSAGE_SIZE + 1] = "000000$103$0000.0$0000.0$0000";
 
 // Variável de dados do processo
 MessageHandling processDataMessageOPC;
+
+// Variável para compartilhamento de setpoints
 MessageHandling setpointsMessageOPC(msg_setpoint);
 
 // socket utilizado para comunicação tcp/ip
 SOCKET      s;
 
 HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-mutex hMutexStatus;
-mutex hMutexSetpoint;
+// Mutex para envio e recebimento de mensagens
 mutex hMutexSendAndReceiveMessage;
+// Mutex para alterar dados de processo
 mutex mutexProcessData;
-
+// Semáforo para permitir aplicar setpoints
 HANDLE shouldSetVariables;
+// Evento da tecla ESC
+HANDLE hEscEvent;
 
 //////////////////////////////////////////////////////////////////////
 // Read the value of an item on an OPC server. 
@@ -165,7 +168,6 @@ void opcClient()
 	//	printf("Thread %d criada com sucesso -> Id = %0d \n", id, dwSocketsClient);
 	//}
 	DWORD ret;
-	DWORD tipoEvento;
 	float SP_PRES_ARGONIO,
 		  SP_TEMP_CAMARA;
 	int   SP_PRES_CAMARA;
@@ -342,11 +344,10 @@ void opcClient()
 		GetLastError();
 		processDataMessageOPC.setProcessDataMessage(aux1, aux2, aux3, aux4);
 		mutexProcessData.unlock();
-
-		hMutexStatus.lock();
-
-		hMutexStatus.unlock();
 		GetLastError();
+
+		ret = WaitForSingleObject(hEscEvent, 0);
+		if (!(ret - WAIT_OBJECT_0)) break;
 	}
 
 	// Cancel the callback and release its reference
@@ -714,6 +715,9 @@ bool sendMessage(string message) {
 bool receiveProcessComputerACK() {
 	char buf[ACK_MESSAGE_SIZE + 1];
 	status = recv(s, buf, ACK_MESSAGE_SIZE, 0);
+	if ((acao = CheckSocketError(status, hOut)) != 0) {
+		return true;
+	}
 	checkAndIncreaseSequenceNumber(buf);
 	if (strncmp(&buf[7], "101", 3) != 0) {
 		SetConsoleTextAttribute(hOut, HLRED);
@@ -726,6 +730,9 @@ bool receiveProcessComputerACK() {
 
 void receiveSetpoints() {
 	status = recv(s, msg_setpoint, SETPOINT_MESSAGE_SIZE, 0);
+	if ((acao = CheckSocketError(status, hOut)) != 0) {
+		return;
+	}
 	checkAndIncreaseSequenceNumber(msg_setpoint);
 	if (strncmp(&msg_setpoint[7], "103", 3) != 0) {
 		SetConsoleTextAttribute(hOut, HLRED);
@@ -740,12 +747,12 @@ void receiveSetpoints() {
 void setpointsRequestAndReceive() {
 	if (sendMessage(SetPointRequestMessage(sequenceNumber))) {
 		printf("Erro ao enviar requisição de Set Points");
-		exit(0);
+		return;
 	}
 	receiveSetpoints();
 	if (sendMessage(SetPointAckMessage(sequenceNumber))) {
-		printf("Erro ao enviar requisição de Set Points");
-		exit(0);
+		printf("Erro ao enviar ACK de Set Points");
+		return;
 	}
 }
 
@@ -755,13 +762,29 @@ void CALLBACK sendProcessDataMessage(PVOID lpParameter, BOOLEAN TimerOrWaitFired
 	mutexProcessData.lock();
 	GetLastError();
 	processDataMessageOPC.setSequenceNumber(sequenceNumber);
-	sendMessage(processDataMessageOPC.toString());
+	if (sendMessage(processDataMessageOPC.toString())) {
+		printf("Erro ao enviar dado de processo");
+		mutexProcessData.unlock();
+		hMutexSendAndReceiveMessage.unlock();
+		return;
+	}
 	if (receiveProcessComputerACK()) {
 		printf("Erro de socket ao receber ACK");
-		exit(0);
+		mutexProcessData.unlock();
+		hMutexSendAndReceiveMessage.unlock();
+		return;
 	}
 	mutexProcessData.unlock();
 	hMutexSendAndReceiveMessage.unlock();
+}
+
+void ConnectToServer(SOCKADDR_IN ServerAddr) {
+	status = connect(s, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr));
+	if (status == SOCKET_ERROR) {
+		printf("Falha na conexao ao servidor ! Erro  = %d\n", WSAGetLastError());
+		WSACleanup();
+		exit(0);
+	}
 }
 
 void socketClient(void) {
@@ -800,12 +823,7 @@ void socketClient(void) {
 	ServerAddr.sin_addr.s_addr = inet_addr(ipaddr);
 
 	// Estabelece a conexão com o servidor
-	status = connect(s, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr));
-	if (status == SOCKET_ERROR) {
-		printf("Falha na conexao ao servidor ! Erro  = %d\n", WSAGetLastError());
-		WSACleanup();
-		exit(0);
-	}
+	ConnectToServer(ServerAddr);
 
 	/*************************************************
 	CREATING TIMERS
@@ -833,15 +851,15 @@ void socketClient(void) {
 	/*************************************************
 	Loop for reading keyboard keys
 	*************************************************/
-	char keyPressed;
-	while (1) { // TODO: while ESC not typed
-		keyPressed = _getch();
-		if (keyPressed == 'S' || keyPressed == 's') {
-			hMutexSendAndReceiveMessage.lock();
-			GetLastError();
-			setpointsRequestAndReceive();
-			hMutexSendAndReceiveMessage.unlock();
+	DWORD ret;
+	while (1) {
+		if (acao == -1) {
+			closesocket(s); // close and reconnect
+			ConnectToServer(ServerAddr);
 		}
+		else if ((acao == -2)) break;
+		ret = WaitForSingleObject(hEscEvent, 0);
+		if (!(ret - WAIT_OBJECT_0)) break;
 	}
 }
 
@@ -850,8 +868,31 @@ void socketClient(void) {
 	- Start OPC client thread
 	- Start socket client thread
 */
+
+void keyboardRead() {
+	char keyPressed = 0;
+	while (keyPressed != ESC) { // TODO: while ESC not typed
+		keyPressed = _getch();
+		if (keyPressed == 'S' || keyPressed == 's') {
+			hMutexSendAndReceiveMessage.lock();
+			GetLastError();
+			setpointsRequestAndReceive();
+			hMutexSendAndReceiveMessage.unlock();
+		}
+	}
+	SetEvent(hEscEvent);
+}
+
+	/*************************************************
+		- Starts semaphores and events
+		- Starts threads
+		- Wait for threads to finish
+	*************************************************/
 void main(void) {
-	
+	/*************************************************
+		Starting semaphores and events
+	*************************************************/
+
 	shouldSetVariables = CreateSemaphore(
 		NULL,
 		0,
@@ -864,8 +905,13 @@ void main(void) {
 		printf("CreateMutex error: %d\n", GetLastError());
 		return;
 	}
+
+	hEscEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
 	thread opc_thread(opcClient);
 	thread socket(socketClient);
+	thread keyboard(keyboardRead);
+	keyboard.join();
 	opc_thread.join();
 	socket.join();
 }
