@@ -146,9 +146,11 @@ SOCKET      s;
 
 HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 // Mutex para envio e recebimento de mensagens
-mutex hMutexSendAndReceiveMessage;
+mutex sendAndReceiveMessage;
 // Mutex para alterar dados de processo
 mutex mutexProcessData;
+// Mutex para alterar o número da mensagem
+mutex mutexSequenceNumber;
 // Semáforo para permitir aplicar setpoints
 HANDLE shouldSetVariables;
 // Evento da tecla ESC
@@ -695,6 +697,7 @@ int CheckSocketError(int status, HANDLE hOut) {
 
 void checkAndIncreaseSequenceNumber(const char* message) {
 	int actualSequenceNumber;
+	mutexSequenceNumber.lock();
 	sscanf(message, "%6d", &actualSequenceNumber);
 	if (sequenceNumber++ != actualSequenceNumber) {
 		SetConsoleTextAttribute(hOut, HLRED);
@@ -703,6 +706,8 @@ void checkAndIncreaseSequenceNumber(const char* message) {
 		SetConsoleTextAttribute(hOut, WHITE);
 		exit(0);
 	}
+	if (sequenceNumber >= 999999) sequenceNumber = 0;
+	mutexSequenceNumber.unlock();
 }
 
 bool sendMessage(string message) {
@@ -744,37 +749,45 @@ void receiveSetpoints() {
 }
 
 void setpointsRequestAndReceive() {
-	if (sendMessage(SetPointRequestMessage(sequenceNumber))) {
+	mutexSequenceNumber.lock();
+	string setPointsMessage = SetPointRequestMessage(sequenceNumber);
+	mutexSequenceNumber.unlock();
+	if (sendMessage(setPointsMessage)) {
 		printf("Erro ao enviar requisição de Set Points");
 		return;
 	}
 	receiveSetpoints();
-	if (sendMessage(SetPointAckMessage(sequenceNumber))) {
+	mutexSequenceNumber.lock();
+	setPointsMessage = SetPointAckMessage(sequenceNumber);
+	mutexSequenceNumber.unlock();
+	if (sendMessage(setPointsMessage)) {
 		printf("Erro ao enviar ACK de Set Points");
 		return;
 	}
 }
 
 void CALLBACK sendProcessDataMessage(PVOID lpParameter, BOOLEAN TimerOrWaitFired) {
-	hMutexSendAndReceiveMessage.lock();
+	sendAndReceiveMessage.lock();
 	GetLastError();
 	mutexProcessData.lock();
 	GetLastError();
+	mutexSequenceNumber.lock();
 	processDataMessageOPC.setSequenceNumber(sequenceNumber);
+	mutexSequenceNumber.unlock();
 	if (sendMessage(processDataMessageOPC.toString())) {
 		printf("Erro ao enviar dado de processo");
 		mutexProcessData.unlock();
-		hMutexSendAndReceiveMessage.unlock();
+		sendAndReceiveMessage.unlock();
 		return;
 	}
 	if (receiveProcessComputerACK()) {
 		printf("Erro de socket ao receber ACK");
 		mutexProcessData.unlock();
-		hMutexSendAndReceiveMessage.unlock();
+		sendAndReceiveMessage.unlock();
 		return;
 	}
 	mutexProcessData.unlock();
-	hMutexSendAndReceiveMessage.unlock();
+	sendAndReceiveMessage.unlock();
 }
 
 void ConnectToServer(SOCKADDR_IN ServerAddr) {
@@ -784,6 +797,7 @@ void ConnectToServer(SOCKADDR_IN ServerAddr) {
 		WSACleanup();
 		exit(0);
 	}
+	acao = 0;
 }
 
 void socketClient(void) {
@@ -873,10 +887,10 @@ void keyboardRead() {
 	while (keyPressed != ESC) { // TODO: while ESC not typed
 		keyPressed = _getch();
 		if (keyPressed == 'S' || keyPressed == 's') {
-			hMutexSendAndReceiveMessage.lock();
+			sendAndReceiveMessage.lock();
 			GetLastError();
 			setpointsRequestAndReceive();
-			hMutexSendAndReceiveMessage.unlock();
+			sendAndReceiveMessage.unlock();
 		}
 	}
 	SetEvent(hEscEvent);
