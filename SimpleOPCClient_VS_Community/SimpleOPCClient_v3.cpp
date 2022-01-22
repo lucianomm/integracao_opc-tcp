@@ -734,6 +734,7 @@ bool receiveProcessComputerACK() {
 
 void receiveSetpoints() {
 	status = recv(s, msg_setpoint, SETPOINT_MESSAGE_SIZE, 0);
+	WaitForSingleObject(shouldSetVariables, 0); // Resetting semaphore (if already set from previous message)
 	if ((acao = CheckSocketError(status, hOut)) != 0) {
 		return;
 	}
